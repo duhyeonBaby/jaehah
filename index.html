@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyjuunn Log Viewer</title>
+    <style>
+        body { font-family: monospace; background: #111; color: #eee; padding: 20px; }
+        h1 { color: #00e6ff; }
+        .controls { margin-bottom: 20px; background: #222; padding: 15px; border-radius: 8px; }
+        input, button { padding: 8px; border-radius: 4px; border: none; }
+        button { background: #00e6ff; color: #000; font-weight: bold; cursor: pointer; }
+        button:hover { background: #fff; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+        th, td { border: 1px solid #333; padding: 10px; text-align: left; }
+        th { background: #222; color: #00e6ff; position: sticky; top: 0; }
+        tr:nth-child(even) { background: #1a1a1a; }
+        tr:hover { background: #333; }
+        .time { color: #888; }
+        .cmd { color: #ffeb3b; font-weight: bold; }
+        .loc { color: #ff4db8; }
+    </style>
+</head>
+<body>
+    <h1>HYJUUNN Terminal Log Dashboard</h1>
+    
+    <div class="controls">
+        <label>Admin Key: </label>
+        <input type="password" id="adminKey" placeholder="Enter Secret Key">
+        <button onclick="fetchLogs()">Load Logs</button>
+        <span id="status" style="margin-left:10px; color:#aaa;"></span>
+    </div>
+
+    <table id="logTable">
+        <thead>
+            <tr>
+                <th>Time (Local)</th>
+                <th>Command</th>
+                <th>Path (CWD)</th>
+                <th>Location</th>
+                <th>IP</th>
+            </tr>
+        </thead>
+        <tbody id="tbody">
+            <tr><td colspan="5" style="text-align:center">Waiting for data...</td></tr>
+        </tbody>
+    </table>
+
+    <script>
+        // 본인의 워커 주소로 변경하세요!
+        const WORKER_URL = "https://hyjuunn-logger.junekim1013.workers.dev/log"; 
+
+        async function fetchLogs() {
+            const key = document.getElementById('adminKey').value;
+            const status = document.getElementById('status');
+            const tbody = document.getElementById('tbody');
+
+            if(!key) { alert("비밀번호를 입력하세요"); return; }
+
+            status.textContent = "Loading...";
+            tbody.innerHTML = "";
+
+            try {
+                const res = await fetch(`${WORKER_URL}?key=${key}`);
+                if(res.status === 401) {
+                    throw new Error("비밀번호가 틀렸습니다!");
+                }
+                const logs = await res.json();
+
+                status.textContent = `Loaded ${logs.length} logs.`;
+
+                if(logs.length === 0) {
+                    tbody.innerHTML = "<tr><td colspan='5' style='text-align:center'>No logs found.</td></tr>";
+                    return;
+                }
+
+                // 테이블 렌더링
+                logs.forEach(log => {
+                    const row = document.createElement('tr');
+                    
+                    // 날짜 포맷팅
+                    const date = new Date(log.ts).toLocaleString('ko-KR');
+                    
+                    // 지역 정보 (이전 로그는 없을 수 있음)
+                    const loc = (log.country && log.country !== 'Unknown') 
+                        ? `${log.country}, ${log.city}` 
+                        : (log.ip === 'unknown' ? '-' : 'Unknown Region');
+
+                    row.innerHTML = `
+                        <td class="time">${escapeHtml(date)}</td>
+                        <td class="cmd">${escapeHtml(log.cmd)}</td>
+                        <td>${escapeHtml(log.cwd)}</td>
+                        <td class="loc">${escapeHtml(loc)}</td>
+                        <td>${escapeHtml(log.ip)}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+            } catch(e) {
+                status.textContent = "Error!";
+                alert(e.message);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
